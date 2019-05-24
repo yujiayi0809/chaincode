@@ -358,7 +358,10 @@ public class Manager extends PeerInfo {
         }
     }
 
-    public void invoke(String fcn, String[] args){
+    FabricClient fabClient_invoke;
+    ChannelClient channelClient_invoke;
+    boolean init_judge = true;
+    public void invokeInit(){
         try {
             Util.cleanUp();
             String caUrl = Config.CA_ORG1_URL;
@@ -371,19 +374,32 @@ public class Manager extends PeerInfo {
             caClient.setAdminUserContext(adminUserContext);
             adminUserContext = caClient.enrollAdminUser(Config.ADMIN, Config.ADMIN_PASSWORD);
 
-            FabricClient fabClient = new FabricClient(adminUserContext);
+            fabClient_invoke = new FabricClient(adminUserContext);
 
-            ChannelClient channelClient = fabClient.createChannelClient(Config.CHANNEL_NAME);
-            Channel channel = channelClient.getChannel();
-            Peer peer = fabClient.getInstance().newPeer(Config.ORG1_PEER_0, Config.ORG1_PEER_0_URL);
-            EventHub eventHub = fabClient.getInstance().newEventHub("eventhub01", "grpc://localhost:7053");
-            Orderer orderer = fabClient.getInstance().newOrderer(Config.ORDERER_NAME, Config.ORDERER_URL);
+            channelClient_invoke = fabClient_invoke.createChannelClient(Config.CHANNEL_NAME);
+            Channel channel = channelClient_invoke.getChannel();
+            Peer peer = fabClient_invoke.getInstance().newPeer(Config.ORG1_PEER_0, Config.ORG1_PEER_0_URL);
+            EventHub eventHub = fabClient_invoke.getInstance().newEventHub("eventhub01", "grpc://localhost:7053");
+            Orderer orderer = fabClient_invoke.getInstance().newOrderer(Config.ORDERER_NAME, Config.ORDERER_URL);
             channel.addPeer(peer);
             channel.addEventHub(eventHub);
             channel.addOrderer(orderer);
             channel.initialize();
 
-            TransactionProposalRequest request = fabClient.getInstance().newTransactionProposalRequest();
+            init_judge = false;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+    public void invoke(String fcn, String[] args){
+        try {
+            if(init_judge) {
+                invokeInit();
+            }
+
+            TransactionProposalRequest request = fabClient_invoke.getInstance().newTransactionProposalRequest();
             ChaincodeID ccid = ChaincodeID.newBuilder().setName(Config.CHAINCODE_1_NAME).build();
             request.setChaincodeID(ccid);
             request.setFcn(fcn);
@@ -397,7 +413,7 @@ public class Manager extends PeerInfo {
             tm2.put("result", ":)".getBytes(UTF_8));
             tm2.put(EXPECTED_EVENT_NAME, EXPECTED_EVENT_DATA);
             request.setTransientMap(tm2);
-            Collection<ProposalResponse> responses = channelClient.sendTransactionProposal(request);
+            Collection<ProposalResponse> responses = channelClient_invoke.sendTransactionProposal(request);
             for (ProposalResponse res: responses) {
                 ChaincodeResponse.Status status = res.getStatus();
                 Logger.getLogger(InvokeChaincode.class.getName()).log(Level.INFO,"Invoked initIdentity on "+Config.CHAINCODE_1_NAME + ". Status - " + status);
@@ -432,6 +448,7 @@ public class Manager extends PeerInfo {
             channel.addEventHub(eventHub);
             channel.addOrderer(orderer);
             channel.initialize();
+
 
             String[] args1 = name;
             Logger.getLogger(QueryChaincode.class.getName()).log(Level.INFO, "Querying for an identity by name - " + args1[0]);
